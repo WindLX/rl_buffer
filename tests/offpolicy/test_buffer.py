@@ -3,7 +3,7 @@ import pytest
 import torch
 import numpy as np
 
-from rl_buffer import ReplayBuffer, ReplayBatch, StatsTracker
+from rl_buffer import ReplayBuffer, ReplayBatch, StatsTracker, ResetStrategy
 
 
 @pytest.fixture
@@ -86,6 +86,7 @@ def test_add_single_step(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> Non
 def test_buffer_overflow(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> None:
     """Test buffer overflow and circular writing."""
     buffer, _ = setup_buffer
+    buffer.reset_strategy = ResetStrategy.ERROR
     sample_data = generate_sample_data(
         buffer.num_envs, buffer.obs_shape, buffer.action_shape
     )
@@ -102,6 +103,33 @@ def test_buffer_overflow(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> Non
     sample_data["obs"] = new_obs
     with pytest.raises(RuntimeError):
         buffer.add(**sample_data, done_reasons=[])
+
+
+def test_buffer_overflow_recurrent(
+    setup_buffer: tuple[ReplayBuffer, StatsTracker],
+) -> None:
+    """Test buffer overflow and circular writing with Recurrent reset strategy."""
+    buffer, _ = setup_buffer
+    buffer.reset_strategy = ResetStrategy.RECURRENT
+    sample_data = generate_sample_data(
+        buffer.num_envs, buffer.obs_shape, buffer.action_shape
+    )
+
+    # Fill the buffer
+    for _ in range(buffer._buffer_size):
+        buffer.add(**sample_data, done_reasons=[])
+
+    assert buffer.current_size == buffer._buffer_size
+    assert buffer.full
+
+    # Add one more step to trigger overflow and reset position
+    new_obs = torch.randn(buffer.num_envs, *buffer.obs_shape, dtype=torch.float32)
+    sample_data["obs"] = new_obs
+    buffer.add(**sample_data, done_reasons=[])
+
+    assert buffer.current_size == buffer._buffer_size
+    assert buffer.full
+    np.testing.assert_array_equal(buffer._observations[0], new_obs)
 
 
 def test_get_batch(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> None:
