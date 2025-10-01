@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import torch
 
-from .base_buffer import BaseBuffer
+from .base_buffer import BaseBuffer, ResetStrategy
 from .stats_tracker import StatsTracker
 
 
@@ -87,6 +87,7 @@ class RolloutBuffer(BaseBuffer):
         gae_lambda: float = 0.95,
         device: torch.device = torch.device("cpu"),
         store_device: torch.device | None = None,
+        reset_strategy: ResetStrategy = ResetStrategy.ERROR,
     ) -> None:
         # -- Base-Inheritance ---
         super().__init__(
@@ -95,6 +96,7 @@ class RolloutBuffer(BaseBuffer):
             stats_tracker=stats_tracker,
             device=device,
             store_device=store_device,
+            reset_strategy=reset_strategy,
         )
 
         # --- Buffer Parameters ---

@@ -1,9 +1,16 @@
 from contextlib import contextmanager
 from typing import Iterator, Mapping, Any
+from enum import Enum
 
 import torch
 
 from .stats_tracker import StatsTracker
+
+
+class ResetStrategy(Enum):
+    ERROR = "error"
+    RECURRENT = "recurrent"
+    AUTO = "auto"
 
 
 class BaseBuffer:
@@ -27,6 +34,7 @@ class BaseBuffer:
         stats_tracker: StatsTracker,
         device: torch.device = torch.device("cpu"),
         store_device: torch.device | None = None,
+        reset_strategy: ResetStrategy = ResetStrategy.ERROR,
     ) -> None:
         # --- Buffer States ---
         self._buffer_size = buffer_size
@@ -34,6 +42,7 @@ class BaseBuffer:
         # Current position to insert the next transition
         self._pos = 0
         self._full = False
+        self.reset_strategy = reset_strategy
 
         self._stats_tracker = stats_tracker
 
@@ -81,7 +90,13 @@ class BaseBuffer:
             int: The position in the buffer where the new data should be inserted.
         """
         if self.full:
-            raise RuntimeError("Buffer is full. Cannot add more transitions.")
+            match self.reset_strategy:
+                case ResetStrategy.ERROR:
+                    raise RuntimeError("Buffer is full. Cannot add more transitions.")
+                case ResetStrategy.RECURRENT:
+                    self._pos = 0
+                case ResetStrategy.AUTO:
+                    self.reset(reset_stats=False)
 
         start_pos = self._pos
         try:

@@ -3,7 +3,7 @@ from typing import Mapping, Any
 
 import torch
 
-from .base_buffer import BaseBuffer
+from .base_buffer import BaseBuffer, ResetStrategy
 from .stats_tracker import StatsTracker
 
 
@@ -65,6 +65,7 @@ class ReplayBuffer(BaseBuffer):
         action_dtype: torch.dtype = torch.float32,
         device: torch.device = torch.device("cpu"),
         store_device: torch.device | None = None,
+        reset_strategy: ResetStrategy = ResetStrategy.RECURRENT,
     ) -> None:
         # -- Base-Inheritance ---
         super().__init__(
@@ -73,6 +74,7 @@ class ReplayBuffer(BaseBuffer):
             stats_tracker=stats_tracker,
             device=device,
             store_device=store_device,
+            reset_strategy=reset_strategy,
         )
 
         # --- Buffer Parameters ---
