@@ -361,15 +361,15 @@ def test_episode_statistics_single_episode_per_env(
             dones_per_step[i],
             value,
             log_prob,
-            custom_metric=custom_metrics_per_step[i],  # extra info
+            {"custom_metric": custom_metrics_per_step[i]},  # extra info
         )
 
     stats = buffer.stats_tracker.get_statistics()
 
-    torch.testing.assert_close(stats["rollout/rewards_mean"], (3.0 + 6.0) / 2)
-    torch.testing.assert_close(stats["rollout/lengths_mean"], (3 + 3) / 2)
+    torch.testing.assert_close(stats["Rollout/rewards_mean"], (3.0 + 6.0) / 2)
+    torch.testing.assert_close(stats["Rollout/lengths_mean"], (3 + 3) / 2)
     torch.testing.assert_close(
-        stats["rollout/custom_metric_mean"], (0.1 + 0.2 + 0.3 + 0.2 + 0.4 + 0.6) / 2
+        stats["Rollout/custom_metric_mean"], (0.1 + 0.2 + 0.3 + 0.2 + 0.4 + 0.6) / 2
     )
 
 
@@ -391,7 +391,7 @@ def test_episode_statistics_multiple_episodes_different_lengths(
         torch.tensor([False, False]),
         torch.zeros(2),
         torch.zeros(2),
-        custom_metric=torch.tensor([0.1, 0.2]),  # extra info
+        {"custom_metric": torch.tensor([0.1, 0.2])},  # extra info
     )
     # Step 1
     buffer.add(
@@ -401,7 +401,7 @@ def test_episode_statistics_multiple_episodes_different_lengths(
         torch.tensor([True, False]),
         torch.zeros(2),
         torch.zeros(2),
-        custom_metric=torch.tensor([0.2, 0.4]),  # extra info
+        {"custom_metric": torch.tensor([0.2, 0.4])},  # extra info
     )  # Env 0 done (rew=2, len=2)
     # Step 2
     buffer.add(
@@ -411,7 +411,7 @@ def test_episode_statistics_multiple_episodes_different_lengths(
         torch.tensor([False, True]),
         torch.zeros(2),
         torch.zeros(2),
-        custom_metric=torch.tensor([0.3, 0.6]),  # extra info
+        {"custom_metric": torch.tensor([0.3, 0.6])},  # extra info
     )  # Env 1 done (rew=3, len=3)
     # Step 3
     buffer.add(
@@ -421,7 +421,7 @@ def test_episode_statistics_multiple_episodes_different_lengths(
         torch.tensor([True, False]),
         torch.zeros(2),
         torch.zeros(2),
-        custom_metric=torch.tensor([0.4, 0.0]),  # extra info
+        {"custom_metric": torch.tensor([0.4, 0.0])},  # extra info
     )  # Env 0 done (rew=4, len=2)
 
     stats = buffer.stats_tracker.get_statistics()
@@ -434,10 +434,10 @@ def test_episode_statistics_multiple_episodes_different_lengths(
         (0.3 + 0.4),
     ]  # Sum per episode
 
-    np.testing.assert_allclose(stats["rollout/rewards_mean"], np.mean(expected_rewards))
-    np.testing.assert_allclose(stats["rollout/lengths_mean"], np.mean(expected_lengths))
+    np.testing.assert_allclose(stats["Rollout/rewards_mean"], np.mean(expected_rewards))
+    np.testing.assert_allclose(stats["Rollout/lengths_mean"], np.mean(expected_lengths))
     np.testing.assert_allclose(
-        stats["rollout/custom_metric_mean"], np.mean(expected_custom_metric)
+        stats["Rollout/custom_metric_mean"], np.mean(expected_custom_metric)
     )
 
 

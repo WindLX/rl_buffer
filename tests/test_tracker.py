@@ -154,7 +154,7 @@ def test_zero_length_episode_does_not_crash():
     tracker.update(dones=np.array([1]), rewards=np.array([5.0]))
     stats = tracker.get_statistics()
     # Step reward should be 5.0 / 1.0 = 5.0
-    assert np.isclose(stats["rollout/step_reward_mean"], 5.0)
+    assert np.isclose(stats["Rollout/step_reward_mean"], 5.0)
 
 
 def test_reset(tracker_two_envs):
@@ -225,7 +225,7 @@ def test_multidimensional_rewards():
     # Env 0 total reward: 1.5 + 3.5 = 5.0
     # Env 1 total reward: 2.0 + 2.0 = 4.0
     # Mean reward: (5.0 + 4.0) / 2 = 4.5
-    assert np.isclose(stats["rollout/rewards_mean"], 4.5)
+    assert np.isclose(stats["Rollout/rewards_mean"], 4.5)
 
 
 def test_get_raw_values(tracker_two_envs):

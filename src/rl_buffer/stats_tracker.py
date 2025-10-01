@@ -69,7 +69,7 @@ class StatsTracker:
         dones: np.ndarray,
         rewards: np.ndarray,
         infos: Mapping[str, Any] = {},
-        done_reasons: list[str | None] | None = None,
+        done_reasons: list[str | None] = [],
     ) -> None:
         """
         Updates the statistics with data from a single timestep.
@@ -103,7 +103,7 @@ class StatsTracker:
                 ep_info[f"ep_{key}"] = float(self._current_episode_stats[key][env_idx])
 
             # 2. Store the done reason if provided
-            if done_reasons and env_idx < len(done_reasons):
+            if env_idx < len(done_reasons):
                 reason = done_reasons[env_idx]
                 if reason in self.done_reason_keys:
                     ep_info[f"ep_done_{reason}"] = 1.0

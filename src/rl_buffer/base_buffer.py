@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Iterator, Mapping, Any
 
 import torch
 
@@ -66,8 +66,8 @@ class BaseBuffer:
         self,
         done: torch.Tensor,
         reward: torch.Tensor,
-        infos: dict[str, torch.Tensor],
-        done_reasons: list[str | None] | None = None,
+        infos: Mapping[str, Any] = {},
+        done_reasons: list[str | None] = [],
     ) -> Iterator[int]:
         """
         A context manager to handle the logic of updating the buffer position `_pos` and the `_full` flag.

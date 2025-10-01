@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Mapping, Any
 
 import torch
 
@@ -107,8 +108,8 @@ class ReplayBuffer(BaseBuffer):
         reward: torch.Tensor,
         done: torch.Tensor,
         next_obs: torch.Tensor,
-        done_reasons: list[str | None] | None = None,
-        **infos,
+        infos: Mapping[str, Any] = {},
+        done_reasons: list[str | None] = [],
     ) -> None:
         """
         Add a transition to the buffer.

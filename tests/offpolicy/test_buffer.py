@@ -32,9 +32,7 @@ def setup_buffer() -> tuple[ReplayBuffer, StatsTracker]:
     )
 
 
-def generate_sample_data(
-    num_envs: int, obs_shape: tuple, action_shape: tuple
-) -> dict[str, torch.Tensor]:
+def generate_sample_data(num_envs: int, obs_shape: tuple, action_shape: tuple):
     """Generates a dictionary of sample data for a single step."""
     return {
         "obs": torch.randn(num_envs, *obs_shape, dtype=torch.float32),
@@ -42,7 +40,7 @@ def generate_sample_data(
         "reward": torch.randn(num_envs, dtype=torch.float32),
         "done": torch.randint(0, 2, (num_envs,), dtype=torch.float32),
         "next_obs": torch.randn(num_envs, *obs_shape, dtype=torch.float32),
-        "custom_metric": torch.randn(num_envs, dtype=torch.float32),
+        "infos": {"custom_metric": torch.randn(num_envs, dtype=torch.float32)},
     }
 
 
@@ -74,7 +72,7 @@ def test_add_single_step(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> Non
         buffer.num_envs, buffer.obs_shape, buffer.action_shape
     )
 
-    buffer.add(done_reasons=None, **sample_data)
+    buffer.add(**sample_data, done_reasons=[])
 
     assert buffer.current_size == 1
     assert not buffer.full
@@ -94,7 +92,7 @@ def test_buffer_overflow(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> Non
 
     # Fill the buffer
     for _ in range(buffer._buffer_size):
-        buffer.add(done_reasons=None, **sample_data)
+        buffer.add(**sample_data, done_reasons=[])
 
     assert buffer.current_size == buffer._buffer_size
     assert buffer.full
@@ -103,7 +101,7 @@ def test_buffer_overflow(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> Non
     new_obs = torch.randn(buffer.num_envs, *buffer.obs_shape, dtype=torch.float32)
     sample_data["obs"] = new_obs
     with pytest.raises(RuntimeError):
-        buffer.add(done_reasons=None, **sample_data)
+        buffer.add(**sample_data, done_reasons=[])
 
 
 def test_get_batch(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> None:
@@ -115,7 +113,7 @@ def test_get_batch(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> None:
 
     # Add some data
     for _ in range(20):
-        buffer.add(done_reasons=None, **sample_data)
+        buffer.add(**sample_data, done_reasons=[])
 
     batch_size = 32
     batch = buffer.get(batch_size)
@@ -141,7 +139,7 @@ def test_reset_buffer(setup_buffer: tuple[ReplayBuffer, StatsTracker]) -> None:
 
     # Add some data
     for _ in range(10):
-        buffer.add(done_reasons=None, **sample_data)
+        buffer.add(**sample_data, done_reasons=[])
 
     assert buffer.current_size == 10
     buffer.reset()
@@ -167,7 +165,7 @@ def test_batch_size_larger_than_buffer(
     )
 
     # Add only one step (4 samples)
-    buffer.add(done_reasons=None, **sample_data)
+    buffer.add(**sample_data, done_reasons=[])
     available_samples = buffer.current_size * buffer.num_envs
     assert available_samples == 4
 
@@ -189,18 +187,18 @@ def test_stats_tracker_integration(
     sample_data["done"][0] = True
     sample_data["done"][1:] = False
     sample_data["reward"][0] = 10.0
-    sample_data["custom_metric"][0] = 5.0
+    sample_data["infos"]["custom_metric"][0] = 5.0
 
-    buffer.add(done_reasons=None, **sample_data)
+    buffer.add(**sample_data, done_reasons=[])
 
     # Check if the episode info buffer in the tracker was populated
     assert len(stats_tracker.ep_info_buffer) > 0
     stats = stats_tracker.get_statistics()
-    assert "rollout/rewards_mean" in stats
-    assert "rollout/lengths_mean" in stats
-    assert "rollout/custom_metric_mean" in stats
-    np.testing.assert_allclose(stats["rollout/rewards_mean"], 10.0)
-    np.testing.assert_allclose(stats["rollout/custom_metric_mean"], 5.0)
+    assert "Rollout/rewards_mean" in stats
+    assert "Rollout/lengths_mean" in stats
+    assert "Rollout/custom_metric_mean" in stats
+    np.testing.assert_allclose(stats["Rollout/rewards_mean"], 10.0)
+    np.testing.assert_allclose(stats["Rollout/custom_metric_mean"], 5.0)
 
 
 def test_multidimensional_observations() -> None:
@@ -218,7 +216,7 @@ def test_multidimensional_observations() -> None:
         sample_data = generate_sample_data(
             buffer.num_envs, buffer.obs_shape, buffer.action_shape
         )
-        buffer.add(done_reasons=None, **sample_data)
+        buffer.add(**sample_data, done_reasons=[])
 
     assert buffer._observations.shape == (10, 2, 3, 64, 64)
     batch = buffer.get(4)
@@ -239,7 +237,7 @@ def test_edge_case_single_env() -> None:
         buffer.num_envs, buffer.obs_shape, buffer.action_shape
     )
 
-    buffer.add(done_reasons=None, **sample_data)
+    buffer.add(**sample_data, done_reasons=[])
 
     assert buffer.current_size == 1
     assert buffer.total_current_size == 1

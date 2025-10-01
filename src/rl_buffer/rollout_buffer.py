@@ -1,4 +1,4 @@
-from typing import Generator
+from typing import Generator, Mapping, Any
 from dataclasses import dataclass
 
 import torch
@@ -142,8 +142,8 @@ class RolloutBuffer(BaseBuffer):
         done: torch.Tensor,
         value: torch.Tensor,
         log_prob: torch.Tensor,
-        done_reasons: list[str | None] | None = None,
-        **infos,
+        infos: Mapping[str, Any] = {},
+        done_reasons: list[str | None] = [],
     ) -> None:
         """
         Add a transition to the buffer.
