@@ -22,7 +22,7 @@ class StatsTracker:
     def __init__(
         self,
         num_envs: int,
-        category: str = "rollout",
+        category: str = "Rollout",
         max_ep_info_buffer: int = 100,
         extra_metrics_keys: list[str] | None = None,
         done_reason_keys: list[str] | None = None,
