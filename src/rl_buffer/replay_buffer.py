@@ -63,6 +63,7 @@ class ReplayBuffer(BaseBuffer):
         obs_dtype: torch.dtype = torch.float32,
         action_dtype: torch.dtype = torch.float32,
         device: torch.device = torch.device("cpu"),
+        store_device: torch.device | None = None,
     ) -> None:
         # -- Base-Inheritance ---
         super().__init__(
@@ -70,6 +71,7 @@ class ReplayBuffer(BaseBuffer):
             num_envs=num_envs,
             stats_tracker=stats_tracker,
             device=device,
+            store_device=store_device,
         )
 
         # --- Buffer Parameters ---
@@ -78,19 +80,23 @@ class ReplayBuffer(BaseBuffer):
 
         # --- Buffer States ---
         self._observations = torch.zeros(
-            (buffer_size, num_envs, *obs_shape), dtype=obs_dtype, device=device
+            (buffer_size, num_envs, *obs_shape), dtype=obs_dtype, device=store_device
         )
         self._actions = torch.zeros(
-            (buffer_size, num_envs, *action_shape), dtype=action_dtype, device=device
+            (buffer_size, num_envs, *action_shape),
+            dtype=action_dtype,
+            device=store_device,
         )
         self._rewards = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.float32, device=device
+            (buffer_size, num_envs), dtype=torch.float32, device=store_device
         )
         self._dones = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.bool, device=device
+            (buffer_size, num_envs), dtype=torch.bool, device=store_device
         )
         self._next_observations = torch.zeros(
-            (buffer_size, num_envs, *obs_shape), dtype=torch.float32, device=device
+            (buffer_size, num_envs, *obs_shape),
+            dtype=torch.float32,
+            device=store_device,
         )
 
     @torch.no_grad()
@@ -122,11 +128,11 @@ class ReplayBuffer(BaseBuffer):
         """
         with self.add_context(done, reward, infos, done_reasons) as pos:
             # Ensure all inputs are on the correct device
-            obs = obs.to(self.device)
-            action = action.to(self.device)
-            reward = reward.to(self.device)
-            done = done.to(self.device)
-            next_obs = next_obs.to(self.device)
+            obs = obs.to(self.store_device)
+            action = action.to(self.store_device)
+            reward = reward.to(self.store_device)
+            done = done.to(self.store_device)
+            next_obs = next_obs.to(self.store_device)
 
             self._observations[pos] = obs
             self._actions[pos] = action

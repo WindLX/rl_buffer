@@ -26,6 +26,7 @@ class BaseBuffer:
         num_envs: int,
         stats_tracker: StatsTracker,
         device: torch.device = torch.device("cpu"),
+        store_device: torch.device | None = None,
     ) -> None:
         # --- Buffer States ---
         self._buffer_size = buffer_size
@@ -39,6 +40,7 @@ class BaseBuffer:
         # --- Buffer Parameters ---
         self.num_envs = num_envs
         self.device = device
+        self.store_device = store_device if store_device is not None else device
 
     def __len__(self) -> int:
         """

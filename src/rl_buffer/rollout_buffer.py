@@ -86,6 +86,7 @@ class RolloutBuffer(BaseBuffer):
         gamma: float = 0.99,
         gae_lambda: float = 0.95,
         device: torch.device = torch.device("cpu"),
+        store_device: torch.device | None = None,
     ) -> None:
         # -- Base-Inheritance ---
         super().__init__(
@@ -93,6 +94,7 @@ class RolloutBuffer(BaseBuffer):
             num_envs=num_envs,
             stats_tracker=stats_tracker,
             device=device,
+            store_device=store_device,
         )
 
         # --- Buffer Parameters ---
@@ -104,29 +106,31 @@ class RolloutBuffer(BaseBuffer):
 
         # --- Buffer States ---
         self._observations = torch.zeros(
-            (buffer_size, num_envs, *obs_shape), dtype=obs_dtype, device=device
+            (buffer_size, num_envs, *obs_shape), dtype=obs_dtype, device=store_device
         )
         self._actions = torch.zeros(
-            (buffer_size, num_envs, *action_shape), dtype=action_dtype, device=device
+            (buffer_size, num_envs, *action_shape),
+            dtype=action_dtype,
+            device=store_device,
         )
         self._rewards = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.float32, device=device
+            (buffer_size, num_envs), dtype=torch.float32, device=store_device
         )
         self._dones = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.bool, device=device
+            (buffer_size, num_envs), dtype=torch.bool, device=store_device
         )
         self._values = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.float32, device=device
+            (buffer_size, num_envs), dtype=torch.float32, device=store_device
         )
         self._log_probs = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.float32, device=device
+            (buffer_size, num_envs), dtype=torch.float32, device=store_device
         )
 
         self._advantages = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.float32, device=device
+            (buffer_size, num_envs), dtype=torch.float32, device=store_device
         )
         self._returns = torch.zeros(
-            (buffer_size, num_envs), dtype=torch.float32, device=device
+            (buffer_size, num_envs), dtype=torch.float32, device=store_device
         )
 
     @torch.no_grad()
@@ -160,12 +164,12 @@ class RolloutBuffer(BaseBuffer):
         """
         with self.add_context(done, reward, infos, done_reasons) as pos:
             # Ensure all inputs are on the correct device
-            obs = obs.to(self.device)
-            action = action.to(self.device)
-            reward = reward.to(self.device)
-            done = done.to(self.device)
-            value = value.to(self.device)
-            log_prob = log_prob.to(self.device)
+            obs = obs.to(self.store_device)
+            action = action.to(self.store_device)
+            reward = reward.to(self.store_device)
+            done = done.to(self.store_device)
+            value = value.to(self.store_device)
+            log_prob = log_prob.to(self.store_device)
 
             self._observations[pos] = obs
             self._actions[pos] = action
