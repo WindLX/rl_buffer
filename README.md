@@ -84,9 +84,10 @@ for step in range(BUFFER_SIZE):
     reward = torch.randn(NUM_ENVS)
     # Simulate an environment terminating roughly every 100 steps
     done = torch.rand(NUM_ENVS) < 0.01
+    truncated = torch.zeros(NUM_ENVS, dtype=torch.float32)
     next_obs = torch.randn(NUM_ENVS, *OBS_SHAPE)
 
-    replay_buffer.add(obs, action, reward, done, next_obs)
+    replay_buffer.add(obs, action, reward, done, next_obs, truncated)
 
 print(f"Buffer populated. Current size: {len(replay_buffer)}")
 

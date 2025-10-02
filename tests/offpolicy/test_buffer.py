@@ -39,6 +39,7 @@ def generate_sample_data(num_envs: int, obs_shape: tuple, action_shape: tuple):
         "action": torch.randn(num_envs, *action_shape, dtype=torch.float32),
         "reward": torch.randn(num_envs, dtype=torch.float32),
         "done": torch.randint(0, 2, (num_envs,), dtype=torch.float32),
+        "truncated": torch.randint(0, 2, (num_envs,), dtype=torch.float32),
         "next_obs": torch.randn(num_envs, *obs_shape, dtype=torch.float32),
         "infos": {"custom_metric": torch.randn(num_envs, dtype=torch.float32)},
     }
@@ -287,6 +288,7 @@ def test_replay_batch_creation() -> None:
         rewards=torch.randn(batch_size),
         next_observations=torch.randn(batch_size, *obs_shape),
         dones=torch.randint(0, 2, (batch_size,)).float(),
+        truncated=torch.randint(0, 2, (batch_size,)).float(),
     )
 
     assert batch.observations.shape == (batch_size, *obs_shape)
@@ -294,3 +296,4 @@ def test_replay_batch_creation() -> None:
     assert batch.rewards.shape == (batch_size,)
     assert batch.next_observations.shape == (batch_size, *obs_shape)
     assert batch.dones.shape == (batch_size,)
+    assert batch.truncated.shape == (batch_size,)

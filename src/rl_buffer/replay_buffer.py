@@ -17,6 +17,7 @@ class ReplayBatch:
         actions (torch.Tensor): Actions taken, shape (batch_size, *action_shape).
         rewards (torch.Tensor): Rewards received, shape (batch_size,).
         dones (torch.Tensor): Done flags, shape (batch_size,).
+        truncated (torch.Tensor): Truncated flags, shape (batch_size,).
         next_obss (torch.Tensor): Next observations, shape (batch_size, *obs_shape).
     """
 
@@ -24,6 +25,7 @@ class ReplayBatch:
     actions: torch.Tensor
     rewards: torch.Tensor
     dones: torch.Tensor
+    truncated: torch.Tensor
     next_observations: torch.Tensor
 
 
@@ -51,6 +53,7 @@ class ReplayBuffer(BaseBuffer):
         _actions (torch.Tensor): Tensor to store actions.
         _rewards (torch.Tensor): Tensor to store rewards.
         _dones (torch.Tensor): Tensor to store done flags for each transition.
+        _truncateds (torch.Tensor): Tensor to store truncated flags for each transition.
         _next_observations (torch.Tensor): Tensor to store next observations.
     """
 
@@ -96,6 +99,9 @@ class ReplayBuffer(BaseBuffer):
         self._dones = torch.zeros(
             (buffer_size, num_envs), dtype=torch.bool, device=store_device
         )
+        self._truncateds = torch.zeros(
+            (buffer_size, num_envs), dtype=torch.bool, device=store_device
+        )
         self._next_observations = torch.zeros(
             (buffer_size, num_envs, *obs_shape),
             dtype=torch.float32,
@@ -109,6 +115,7 @@ class ReplayBuffer(BaseBuffer):
         action: torch.Tensor,
         reward: torch.Tensor,
         done: torch.Tensor,
+        truncated: torch.Tensor,
         next_obs: torch.Tensor,
         infos: Mapping[str, Any] = {},
         done_reasons: list[str | None] = [],
@@ -122,6 +129,7 @@ class ReplayBuffer(BaseBuffer):
             action: Action taken at time t (torch.Tensor).
             reward: Reward received at time t (torch.Tensor).
             done: Done flag at time t (torch.Tensor).
+            truncated: Truncated flag at time t (torch.Tensor).
             next_obs: Next observation at time t (torch.Tensor).
             done_reason: Optional list of done reasons.
             infos: Additional metrics to track per episode.
@@ -135,21 +143,15 @@ class ReplayBuffer(BaseBuffer):
             action = action.to(self.store_device)
             reward = reward.to(self.store_device)
             done = done.to(self.store_device)
+            truncated = truncated.to(self.store_device)
             next_obs = next_obs.to(self.store_device)
 
             self._observations[pos] = obs
             self._actions[pos] = action
             self._rewards[pos] = reward
             self._dones[pos] = done
+            self._truncateds[pos] = truncated
             self._next_observations[pos] = next_obs
-
-            # Update episode-wise statistics (convert to numpy for stats tracker)
-            self.stats_tracker.update(
-                dones=done.cpu().numpy(),
-                rewards=reward.cpu().numpy(),
-                infos=infos,
-                done_reasons=done_reasons,
-            )
 
     @torch.no_grad()
     def get(self, batch_size: int) -> ReplayBatch:
@@ -187,6 +189,7 @@ class ReplayBuffer(BaseBuffer):
         rewards = self._rewards[batch_inds, env_indices]
         next_obs = self._next_observations[batch_inds, env_indices]
         dones = self._dones[batch_inds, env_indices]
+        truncated = self._truncateds[batch_inds, env_indices]
 
         return ReplayBatch(
             observations=obs.to(self.device),
@@ -194,4 +197,5 @@ class ReplayBuffer(BaseBuffer):
             rewards=rewards.to(self.device),
             next_observations=next_obs.to(self.device),
             dones=dones.to(self.device),
+            truncated=truncated.to(self.device),
         )

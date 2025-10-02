@@ -40,10 +40,11 @@ def run_replay_buffer_example():
         reward = torch.randn(NUM_ENVS)
         # Simulate that an environment terminates roughly every 100 steps
         done = torch.rand(NUM_ENVS) < 0.01
+        truncated = torch.zeros(NUM_ENVS, dtype=torch.float32)
         next_obs = torch.randint(0, 256, (NUM_ENVS, *OBS_SHAPE), dtype=OBS_DTYPE)
 
         # Add data to the buffer
-        replay_buffer.add(obs, action, reward, done, next_obs)
+        replay_buffer.add(obs, action, reward, done, next_obs, truncated)
 
     print(f"Buffer populated. Current size: {len(replay_buffer)}")
 
