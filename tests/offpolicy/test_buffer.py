@@ -288,7 +288,7 @@ def test_replay_batch_creation() -> None:
         rewards=torch.randn(batch_size),
         next_observations=torch.randn(batch_size, *obs_shape),
         dones=torch.randint(0, 2, (batch_size,)).float(),
-        truncated=torch.randint(0, 2, (batch_size,)).float(),
+        truncateds=torch.randint(0, 2, (batch_size,)).float(),
     )
 
     assert batch.observations.shape == (batch_size, *obs_shape)
@@ -296,4 +296,4 @@ def test_replay_batch_creation() -> None:
     assert batch.rewards.shape == (batch_size,)
     assert batch.next_observations.shape == (batch_size, *obs_shape)
     assert batch.dones.shape == (batch_size,)
-    assert batch.truncated.shape == (batch_size,)
+    assert batch.truncateds.shape == (batch_size,)

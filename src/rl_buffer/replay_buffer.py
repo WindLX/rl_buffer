@@ -17,7 +17,7 @@ class ReplayBatch:
         actions (torch.Tensor): Actions taken, shape (batch_size, *action_shape).
         rewards (torch.Tensor): Rewards received, shape (batch_size,).
         dones (torch.Tensor): Done flags, shape (batch_size,).
-        truncated (torch.Tensor): Truncated flags, shape (batch_size,).
+        truncateds (torch.Tensor): Truncated flags, shape (batch_size,).
         next_obss (torch.Tensor): Next observations, shape (batch_size, *obs_shape).
     """
 
@@ -25,7 +25,7 @@ class ReplayBatch:
     actions: torch.Tensor
     rewards: torch.Tensor
     dones: torch.Tensor
-    truncated: torch.Tensor
+    truncateds: torch.Tensor
     next_observations: torch.Tensor
 
 
@@ -189,7 +189,7 @@ class ReplayBuffer(BaseBuffer):
         rewards = self._rewards[batch_inds, env_indices]
         next_obs = self._next_observations[batch_inds, env_indices]
         dones = self._dones[batch_inds, env_indices]
-        truncated = self._truncateds[batch_inds, env_indices]
+        truncateds = self._truncateds[batch_inds, env_indices]
 
         return ReplayBatch(
             observations=obs.to(self.device),
@@ -197,5 +197,5 @@ class ReplayBuffer(BaseBuffer):
             rewards=rewards.to(self.device),
             next_observations=next_obs.to(self.device),
             dones=dones.to(self.device),
-            truncated=truncated.to(self.device),
+            truncateds=truncateds.to(self.device),
         )
