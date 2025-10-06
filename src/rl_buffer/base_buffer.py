@@ -31,7 +31,7 @@ class BaseBuffer:
         self,
         buffer_size: int,
         num_envs: int,
-        stats_tracker: StatsTracker,
+        stats_tracker: StatsTracker | None,
         device: torch.device = torch.device("cpu"),
         store_device: torch.device | None = None,
         reset_strategy: ResetStrategy = ResetStrategy.ERROR,
@@ -67,8 +67,8 @@ class BaseBuffer:
         self._pos = 0
         self._full = False
 
-        if reset_stats:
-            self._stats_tracker.reset()
+        if reset_stats and self.stats_tracker is not None:
+            self.stats_tracker.reset()
 
     @contextmanager
     def add_context(
@@ -100,13 +100,14 @@ class BaseBuffer:
 
         start_pos = self._pos
         try:
-            # Update episode-wise statistics (convert to numpy for stats tracker)
-            self.stats_tracker.update(
-                dones=done.cpu().numpy(),
-                rewards=reward.cpu().numpy(),
-                infos=infos,
-                done_reasons=done_reasons,
-            )
+            if self.stats_tracker is not None:
+                # Update episode-wise statistics (convert to numpy for stats tracker)
+                self.stats_tracker.update(
+                    dones=done.cpu().numpy(),
+                    rewards=reward.cpu().numpy(),
+                    infos=infos,
+                    done_reasons=done_reasons,
+                )
             yield start_pos
         finally:
             self._pos += 1
@@ -170,7 +171,7 @@ class BaseBuffer:
             return self._pos * self.num_envs
 
     @property
-    def stats_tracker(self) -> StatsTracker:
+    def stats_tracker(self) -> StatsTracker | None:
         """
         Get the stats tracker for episode statistics and metrics.
 

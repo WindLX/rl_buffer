@@ -54,15 +54,6 @@ class SharedReplayBuffer(BaseBuffer):
         store_device: torch.device | None = None,
         reset_strategy: ResetStrategy = ResetStrategy.RECURRENT,
     ) -> None:
-        # -- Base-Inheritance ---
-        super().__init__(
-            buffer_size=buffer_size,
-            num_envs=num_envs,
-            stats_tracker=stats_tracker,
-            device=device,
-            store_device=store_device,
-            reset_strategy=reset_strategy,
-        )
 
         # --- Buffer Parameters ---
         self.obs_shape = obs_shape
@@ -74,6 +65,16 @@ class SharedReplayBuffer(BaseBuffer):
                 raise ValueError(
                     "Main process should not receive shared_tensors or shared_lock"
                 )
+
+            # -- Base-Inheritance ---
+            super().__init__(
+                buffer_size=buffer_size,
+                num_envs=num_envs,
+                stats_tracker=stats_tracker,
+                device=device,
+                store_device=store_device,
+                reset_strategy=reset_strategy,
+            )
 
             self._observations = torch.zeros(
                 (buffer_size, num_envs, *obs_shape),
@@ -107,6 +108,16 @@ class SharedReplayBuffer(BaseBuffer):
                 raise ValueError(
                     "Worker process must receive shared_tensors and shared_lock"
                 )
+
+            # -- Base-Inheritance ---
+            super().__init__(
+                buffer_size=buffer_size,
+                num_envs=num_envs,
+                stats_tracker=None,
+                device=device,
+                store_device=store_device,
+                reset_strategy=reset_strategy,
+            )
 
             self._observations = shared_tensors["observations"]
             self._actions = shared_tensors["actions"]
