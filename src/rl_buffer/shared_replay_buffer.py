@@ -164,7 +164,7 @@ class SharedReplayBuffer(SharedBaseBuffer):
             self._truncateds = shared_memory_components["truncateds"]
             self._next_observations = shared_memory_components["next_observations"]
 
-    def get_shared_components(self) -> dict:
+    def get_shared_components(self) -> tuple[dict, dict]:
         """
         Main process uses this to share buffer components with worker processes.
         """
@@ -175,6 +175,7 @@ class SharedReplayBuffer(SharedBaseBuffer):
             "dones": self._dones,
             "truncateds": self._truncateds,
             "next_obs": self._next_observations,
+        }, {
             "pos": self._pos_tensor,
             "full": self._full_tensor,
         }
