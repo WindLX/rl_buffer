@@ -1,10 +1,24 @@
-from typing import Mapping, Any
+from typing import Mapping, Any, NamedTuple
 
 import torch
 
 from .shared_base_buffer import SharedBaseBuffer, ResetStrategy
 from .replay_buffer import ReplayBatch
 from .stats_tracker import StatsTracker
+
+
+class SharedStates(NamedTuple):
+    pos: torch.Tensor
+    full: torch.Tensor
+
+
+class SharedMemoryComponents(NamedTuple):
+    observations: torch.Tensor
+    actions: torch.Tensor
+    rewards: torch.Tensor
+    dones: torch.Tensor
+    truncateds: torch.Tensor
+    next_observations: torch.Tensor
 
 
 class SharedReplayBuffer(SharedBaseBuffer):
@@ -80,8 +94,8 @@ class SharedReplayBuffer(SharedBaseBuffer):
         action_shape: tuple[int, ...],
         stats_tracker: StatsTracker,
         is_main_process: bool,
-        shared_memory_components: dict | None = None,
-        shared_states: dict | None = None,
+        shared_memory_components: SharedMemoryComponents | None = None,
+        shared_states: SharedStates | None = None,
         obs_dtype: torch.dtype = torch.float32,
         action_dtype: torch.dtype = torch.float32,
         device: torch.device = torch.device("cpu"),
@@ -154,31 +168,33 @@ class SharedReplayBuffer(SharedBaseBuffer):
                 reset_strategy=reset_strategy,
             )
 
-            self._pos_tensor = shared_states["pos"]
-            self._full_tensor = shared_states["full"]
+            self._pos_tensor = shared_states.pos
+            self._full_tensor = shared_states.full
 
-            self._observations = shared_memory_components["observations"]
-            self._actions = shared_memory_components["actions"]
-            self._rewards = shared_memory_components["rewards"]
-            self._dones = shared_memory_components["dones"]
-            self._truncateds = shared_memory_components["truncateds"]
-            self._next_observations = shared_memory_components["next_observations"]
+            self._observations = shared_memory_components.observations
+            self._actions = shared_memory_components.actions
+            self._rewards = shared_memory_components.rewards
+            self._dones = shared_memory_components.dones
+            self._truncateds = shared_memory_components.truncateds
+            self._next_observations = shared_memory_components.next_observations
 
-    def get_shared_components(self) -> tuple[dict, dict]:
+    def get_shared_components(self) -> tuple[SharedMemoryComponents, SharedStates]:
         """
         Main process uses this to share buffer components with worker processes.
+        Returns:
+            tuple: (SharedMemoryComponents, SharedStates)
         """
-        return {
-            "obs": self._observations,
-            "actions": self._actions,
-            "rewards": self._rewards,
-            "dones": self._dones,
-            "truncateds": self._truncateds,
-            "next_obs": self._next_observations,
-        }, {
-            "pos": self._pos_tensor,
-            "full": self._full_tensor,
-        }
+        return SharedMemoryComponents(
+            observations=self._observations,
+            actions=self._actions,
+            rewards=self._rewards,
+            dones=self._dones,
+            truncateds=self._truncateds,
+            next_observations=self._next_observations,
+        ), SharedStates(
+            pos=self._pos_tensor,
+            full=self._full_tensor,
+        )
 
     @torch.no_grad()
     def add(
