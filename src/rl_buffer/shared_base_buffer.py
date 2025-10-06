@@ -1,19 +1,14 @@
 from contextlib import contextmanager
+from abc import ABC, abstractmethod
 from typing import Iterator, Mapping, Any
-from enum import Enum
 
 import torch
 
 from .stats_tracker import StatsTracker
+from .base_buffer import ResetStrategy
 
 
-class ResetStrategy(Enum):
-    ERROR = "error"
-    RECURRENT = "recurrent"
-    AUTO = "auto"
-
-
-class BaseBuffer:
+class SharedBaseBuffer(ABC):
     """
     Base class for buffers.
 
@@ -31,17 +26,13 @@ class BaseBuffer:
         self,
         buffer_size: int,
         num_envs: int,
-        stats_tracker: StatsTracker,
+        stats_tracker: StatsTracker | None,
         device: torch.device = torch.device("cpu"),
         store_device: torch.device | None = None,
         reset_strategy: ResetStrategy = ResetStrategy.ERROR,
     ) -> None:
         # --- Buffer States ---
         self._buffer_size = buffer_size
-
-        # Current position to insert the next transition
-        self._pos = 0
-        self._full = False
 
         self.reset_strategy = reset_strategy
 
@@ -61,14 +52,48 @@ class BaseBuffer:
         """
         return self.current_size
 
+    @abstractmethod
+    def pos(self) -> int:
+        """
+        Get the current position in the buffer.
+
+        Returns:
+            int: Current position.
+        """
+        pass
+
+    @abstractmethod
+    def set_pos(self, value: int):
+        """
+        Set the current position in the buffer.
+
+        Args:
+            value (int): New position value.
+        """
+        pass
+
+    @abstractmethod
+    def full(self) -> bool:
+        """
+        Check if the buffer is full.
+
+        Returns:
+            bool: True if the buffer is full, False otherwise.
+        """
+        pass
+
+    @abstractmethod
+    def set_full(self, value: bool):
+        pass
+
     def reset(self, reset_stats: bool = False) -> None:
         """
         Clear the buffer content and reset episode tracking.
         """
-        self._pos = 0
-        self._full = False
+        self.set_pos(0)
+        self.set_full(False)
 
-        if reset_stats:
+        if reset_stats and self.stats_tracker is not None:
             self.stats_tracker.reset()
 
     @contextmanager
@@ -90,39 +115,30 @@ class BaseBuffer:
         Yields:
             int: The position in the buffer where the new data should be inserted.
         """
-        if self.full:
+        if self.full():
             match self.reset_strategy:
                 case ResetStrategy.ERROR:
                     raise RuntimeError("Buffer is full. Cannot add more transitions.")
                 case ResetStrategy.RECURRENT:
-                    self._pos = 0
+                    self.set_pos(0)
                 case ResetStrategy.AUTO:
                     self.reset(reset_stats=False)
 
-        start_pos = self._pos
+        start_pos = self.pos()
         try:
-            # Update episode-wise statistics (convert to numpy for stats tracker)
-            self.stats_tracker.update(
-                dones=done.cpu().numpy(),
-                rewards=reward.cpu().numpy(),
-                infos=infos,
-                done_reasons=done_reasons,
-            )
+            if self.stats_tracker is not None:
+                # Update episode-wise statistics (convert to numpy for stats tracker)
+                self.stats_tracker.update(
+                    dones=done.cpu().numpy(),
+                    rewards=reward.cpu().numpy(),
+                    infos=infos,
+                    done_reasons=done_reasons,
+                )
             yield start_pos
         finally:
-            self._pos += 1
-            if self._pos >= self._buffer_size:
-                self._full = True
-
-    @property
-    def full(self) -> bool:
-        """
-        Check if the buffer is full.
-
-        Returns:
-            bool: True if the buffer is full, False otherwise.
-        """
-        return self._full
+            self.set_pos(self.pos() + 1)
+            if self.pos() >= self.capacity:
+                self.set_full(True)
 
     @property
     def capacity(self) -> int:
@@ -152,10 +168,10 @@ class BaseBuffer:
         Returns:
             int: Number of filled steps in the buffer.
         """
-        if self._full:
-            return self._buffer_size
+        if self.full():
+            return self.capacity
         else:
-            return self._pos
+            return self.pos()
 
     @property
     def total_current_size(self) -> int:
@@ -165,13 +181,13 @@ class BaseBuffer:
         Returns:
             int: Total size of the buffer.
         """
-        if self._full:
-            return self._buffer_size * self.num_envs
+        if self.full():
+            return self.capacity * self.num_envs
         else:
-            return self._pos * self.num_envs
+            return self.pos() * self.num_envs
 
     @property
-    def stats_tracker(self) -> StatsTracker:
+    def stats_tracker(self) -> StatsTracker | None:
         """
         Get the stats tracker for episode statistics and metrics.
 

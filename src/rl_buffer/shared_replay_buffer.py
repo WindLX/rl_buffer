@@ -1,14 +1,13 @@
-from dataclasses import dataclass
 from typing import Mapping, Any
 
 import torch
 
-from .base_buffer import BaseBuffer, ResetStrategy
+from .shared_base_buffer import SharedBaseBuffer, ResetStrategy
 from .replay_buffer import ReplayBatch
 from .stats_tracker import StatsTracker
 
 
-class SharedReplayBuffer(BaseBuffer):
+class SharedReplayBuffer(SharedBaseBuffer):
     """
     SharedReplayBuffer is a high-performance, multiprocessing-compatible replay buffer designed for reinforcement learning (RL) with parallel environments, especially in distributed data parallel (DDP) settings. All buffer operations are performed on GPU (or specified device) for maximum efficiency, and the buffer supports sharing memory across multiple processes for scalable RL training.
 
@@ -109,8 +108,10 @@ class SharedReplayBuffer(BaseBuffer):
                 device=device,
                 store_device=store_device,
                 reset_strategy=reset_strategy,
-                shared_states=shared_states,
             )
+
+            self._pos_tensor = torch.tensor([0], dtype=torch.long).share_memory_()
+            self._full_tensor = torch.tensor([0], dtype=torch.bool).share_memory_()
 
             self._observations = torch.zeros(
                 (buffer_size, num_envs, *obs_shape),
@@ -153,6 +154,9 @@ class SharedReplayBuffer(BaseBuffer):
                 reset_strategy=reset_strategy,
             )
 
+            self._pos_tensor = shared_states["pos"]
+            self._full_tensor = shared_states["full"]
+
             self._observations = shared_memory_components["observations"]
             self._actions = shared_memory_components["actions"]
             self._rewards = shared_memory_components["rewards"]
@@ -160,24 +164,20 @@ class SharedReplayBuffer(BaseBuffer):
             self._truncateds = shared_memory_components["truncateds"]
             self._next_observations = shared_memory_components["next_observations"]
 
-    def get_shared_components(self) -> tuple[dict, dict]:
+    def get_shared_components(self) -> dict:
         """
         Main process uses this to share buffer components with worker processes.
         """
-        return (
-            {
-                "obs": self._observations,
-                "actions": self._actions,
-                "rewards": self._rewards,
-                "dones": self._dones,
-                "truncateds": self._truncateds,
-                "next_obs": self._next_observations,
-            },
-            {
-                "pos": self._pos_value,
-                "full": self._full_value,
-            },
-        )
+        return {
+            "obs": self._observations,
+            "actions": self._actions,
+            "rewards": self._rewards,
+            "dones": self._dones,
+            "truncateds": self._truncateds,
+            "next_obs": self._next_observations,
+            "pos": self._pos_tensor,
+            "full": self._full_tensor,
+        }
 
     @torch.no_grad()
     def add(
@@ -271,3 +271,15 @@ class SharedReplayBuffer(BaseBuffer):
             dones=dones.to(self.device),
             truncateds=truncateds.to(self.device),
         )
+
+    def pos(self) -> int:
+        return int(self._pos_tensor[0].item())
+
+    def set_pos(self, value: int) -> None:
+        self._pos_tensor[0] = value
+
+    def full(self) -> bool:
+        return bool(self._full_tensor[0].item())
+
+    def set_full(self, value: bool) -> None:
+        self._full_tensor[0] = value
