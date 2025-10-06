@@ -1,6 +1,8 @@
 from contextlib import contextmanager
 from typing import Iterator, Mapping, Any
 from enum import Enum
+from multiprocessing import Value
+from ctypes import c_long, c_bool
 
 import torch
 
@@ -35,13 +37,19 @@ class BaseBuffer:
         device: torch.device = torch.device("cpu"),
         store_device: torch.device | None = None,
         reset_strategy: ResetStrategy = ResetStrategy.ERROR,
+        shared_states: dict | None = None,
     ) -> None:
         # --- Buffer States ---
         self._buffer_size = buffer_size
 
         # Current position to insert the next transition
-        self._pos = 0
-        self._full = False
+        if shared_states is None:
+            self._pos_value = Value(c_long, 0)
+            self._full_value = Value(c_bool, False)
+        else:
+            self._pos_value = shared_states["pos"]
+            self._full_value = shared_states["full"]
+
         self.reset_strategy = reset_strategy
 
         self._stats_tracker = stats_tracker
@@ -50,6 +58,37 @@ class BaseBuffer:
         self.num_envs = num_envs
         self.device = device
         self.store_device = store_device if store_device is not None else device
+
+    def get_shared_states(self) -> dict:
+        """主进程调用此方法，以获取要传递给子进程的共享状态。"""
+        return {
+            "pos": self._pos_value,
+            "full": self._full_value,
+        }
+
+    @property
+    def _pos(self) -> int:
+        """获取当前位置（原子读取）。"""
+        with self._pos_value.get_lock():
+            return self._pos_value.value
+
+    @_pos.setter
+    def _pos(self, value: int):
+        """设置当前位置（原子写入）。"""
+        with self._pos_value.get_lock():
+            self._pos_value.value = value
+
+    @property
+    def _full(self) -> bool:
+        """检查buffer是否已满（原子读取）。"""
+        with self._full_value.get_lock():
+            return self._full_value.value
+
+    @_full.setter
+    def _full(self, value: bool):
+        """设置buffer是否已满（原子写入）。"""
+        with self._full_value.get_lock():
+            self._full_value.value = value
 
     def __len__(self) -> int:
         """
@@ -110,7 +149,8 @@ class BaseBuffer:
                 )
             yield start_pos
         finally:
-            self._pos += 1
+            with self._pos_value.get_lock():
+                self._pos += 1
             if self._pos >= self._buffer_size:
                 self._full = True
 

@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from typing import Mapping, Any
 
 import torch
-from multiprocessing import Lock
-from multiprocessing.synchronize import Lock as LockType
 
 from .base_buffer import BaseBuffer, ResetStrategy
 from .replay_buffer import ReplayBatch
@@ -12,30 +10,67 @@ from .stats_tracker import StatsTracker
 
 class SharedReplayBuffer(BaseBuffer):
     """
-    Replay buffer for RL with parallel environments for DDP.
-    All operations are performed on GPU for maximum performance.
+    SharedReplayBuffer is a high-performance, multiprocessing-compatible replay buffer designed for reinforcement learning (RL) with parallel environments, especially in distributed data parallel (DDP) settings. All buffer operations are performed on GPU (or specified device) for maximum efficiency, and the buffer supports sharing memory across multiple processes for scalable RL training.
 
-    Attributes:
-        _buffer_size (int): Maximum number of transitions to store in the buffer.
-        _pos (int): Current position in the buffer for adding new transitions.
-        _full (bool): Whether the buffer is full.
-        _stats_tracker (StatsTracker): Tracker for episode statistics and metrics.
+    Key Features:
+    -------------
+    - Supports parallel environments: Stores transitions for multiple environments running in parallel, enabling efficient experience collection in vectorized or distributed RL setups.
+    - Multiprocessing safe: Utilizes shared memory tensors and locks to allow safe concurrent access from multiple processes (main and worker processes).
+    - Device flexibility: All tensors can be allocated on CPU or GPU, with efficient device transfers for sampling and storage.
+    - Episode statistics tracking: Integrates with a StatsTracker to record episode-level metrics and statistics.
+    - Efficient sampling: Provides fast, random sampling of transitions for off-policy RL algorithms.
+    - Handles truncated and done flags: Supports both environment terminations (done) and truncations (e.g., time limits), which is important for correct RL training.
 
-        num_envs (int): Number of parallel environments.
-        device (torch.device): Device on which to store tensors (CPU or GPU).
+    Usage Pattern:
+    --------------
+    - The main process creates the buffer and owns the shared memory tensors and lock.
+    - Worker processes receive references to the shared tensors and lock via get_shared_components(), allowing them to add or sample transitions safely.
+    - Transitions are added with add(), which updates the buffer and episode statistics.
+    - Batches of transitions are sampled with get(), supporting efficient training.
 
-        obs_shape (tuple): Shape of the observation space.
-        action_shape (tuple): Shape of the action space.
+    Parameters:
+    -----------
+    buffer_size (int): Maximum number of time steps (transitions) to store per environment.
+    obs_shape (tuple[int, ...]): Shape of the observation space.
+    action_shape (tuple[int, ...]): Shape of the action space.
+    stats_tracker (StatsTracker): Tracks episode statistics and metrics.
+    is_main_process (bool): Whether this instance is the main process (creates shared memory) or a worker (attaches to shared memory).
+    shared_tensors (dict, optional): Shared memory tensors for worker processes.
+    shared_lock (LockType, optional): Shared lock for synchronizing access.
+    obs_dtype (torch.dtype): Data type for observations.
+    action_dtype (torch.dtype): Data type for actions.
+    device (torch.device): Device for sampling output tensors.
+    store_device (torch.device, optional): Device for storing buffer tensors.
+    reset_strategy (ResetStrategy): Strategy for resetting buffer state.
 
-        gamma (float): Discount factor for future rewards.
-        gae_lambda (float): Lambda parameter for Generalized Advantage Estimation (GAE).
+    -----------
+    _observations (torch.Tensor): Shared tensor for observations.
+    _actions (torch.Tensor): Shared tensor for actions.
+    _rewards (torch.Tensor): Shared tensor for rewards.
+    _dones (torch.Tensor): Shared tensor for done flags.
+    _truncateds (torch.Tensor): Shared tensor for truncated flags.
+    _next_observations (torch.Tensor): Shared tensor for next observations.
+    _lock (LockType): Lock for synchronizing buffer access.
 
-        _observations (torch.Tensor): Tensor to store observations.
-        _actions (torch.Tensor): Tensor to store actions.
-        _rewards (torch.Tensor): Tensor to store rewards.
-        _dones (torch.Tensor): Tensor to store done flags for each transition.
-        _truncateds (torch.Tensor): Tensor to store truncated flags for each transition.
-        _next_observations (torch.Tensor): Tensor to store next observations.
+    Methods:
+    --------
+    get_shared_components() -> tuple[dict, LockType]:
+        Returns the shared tensors and lock for worker processes to attach to the buffer.
+
+    add(obs, action, reward, done, truncated, next_obs, infos, done_reasons):
+        Adds a transition to the buffer and updates episode statistics. Must be called by the main process.
+
+    get(batch_size) -> ReplayBatch:
+        Samples a batch of transitions from the buffer for training.
+
+    -------
+    ValueError: If required shared components are missing or if sampling from an empty buffer.
+
+    Typical Use Case:
+    -----------------
+    - In distributed RL, the main process creates the buffer and shares its components with worker processes.
+    - Workers add transitions concurrently, and the main process (or any process) can sample batches for training.
+    - All operations are protected by a lock to ensure data consistency.
     """
 
     def __init__(
@@ -46,8 +81,8 @@ class SharedReplayBuffer(BaseBuffer):
         action_shape: tuple[int, ...],
         stats_tracker: StatsTracker,
         is_main_process: bool,
-        shared_tensors: dict | None = None,
-        shared_lock: LockType | None = None,
+        shared_memory_components: dict | None = None,
+        shared_states: dict | None = None,
         obs_dtype: torch.dtype = torch.float32,
         action_dtype: torch.dtype = torch.float32,
         device: torch.device = torch.device("cpu"),
@@ -61,9 +96,9 @@ class SharedReplayBuffer(BaseBuffer):
 
         # --- Buffer States ---
         if is_main_process:
-            if shared_tensors is not None or shared_lock is not None:
+            if shared_memory_components is not None or shared_states is not None:
                 raise ValueError(
-                    "Main process should not receive shared_tensors or shared_lock"
+                    "Main process should not receive shared_memory_components or shared_states"
                 )
 
             # -- Base-Inheritance ---
@@ -74,6 +109,7 @@ class SharedReplayBuffer(BaseBuffer):
                 device=device,
                 store_device=store_device,
                 reset_strategy=reset_strategy,
+                shared_states=shared_states,
             )
 
             self._observations = torch.zeros(
@@ -101,12 +137,10 @@ class SharedReplayBuffer(BaseBuffer):
                 device=store_device,
             ).share_memory_()
 
-            self._lock = Lock()
-
         else:
-            if shared_tensors is None or shared_lock is None:
+            if shared_memory_components is None or shared_states is None:
                 raise ValueError(
-                    "Worker process must receive shared_tensors and shared_lock"
+                    "Worker process must receive shared_memory_components and shared_states"
                 )
 
             # -- Base-Inheritance ---
@@ -119,25 +153,31 @@ class SharedReplayBuffer(BaseBuffer):
                 reset_strategy=reset_strategy,
             )
 
-            self._observations = shared_tensors["observations"]
-            self._actions = shared_tensors["actions"]
-            self._rewards = shared_tensors["rewards"]
-            self._dones = shared_tensors["dones"]
-            self._truncateds = shared_tensors["truncateds"]
-            self._next_observations = shared_tensors["next_observations"]
+            self._observations = shared_memory_components["observations"]
+            self._actions = shared_memory_components["actions"]
+            self._rewards = shared_memory_components["rewards"]
+            self._dones = shared_memory_components["dones"]
+            self._truncateds = shared_memory_components["truncateds"]
+            self._next_observations = shared_memory_components["next_observations"]
 
-            self._lock = shared_lock
-
-    def get_shared_components(self) -> tuple[dict, LockType]:
-        """主进程调用此方法，以获取需要传递给子进程的共享组件。"""
-        return {
-            "obs": self._observations,
-            "actions": self._actions,
-            "rewards": self._rewards,
-            "dones": self._dones,
-            "truncateds": self._truncateds,
-            "next_obs": self._next_observations,
-        }, self._lock
+    def get_shared_components(self) -> tuple[dict, dict]:
+        """
+        Main process uses this to share buffer components with worker processes.
+        """
+        return (
+            {
+                "obs": self._observations,
+                "actions": self._actions,
+                "rewards": self._rewards,
+                "dones": self._dones,
+                "truncateds": self._truncateds,
+                "next_obs": self._next_observations,
+            },
+            {
+                "pos": self._pos_value,
+                "full": self._full_value,
+            },
+        )
 
     @torch.no_grad()
     def add(
@@ -169,22 +209,21 @@ class SharedReplayBuffer(BaseBuffer):
         Raises:
             RuntimeError: If the buffer is full and cannot accept more transitions.
         """
-        with self._lock:
-            with self.add_context(done, reward, infos, done_reasons) as pos:
-                # Ensure all inputs are on the correct device
-                obs = obs.to(self.store_device)
-                action = action.to(self.store_device)
-                reward = reward.to(self.store_device)
-                done = done.to(self.store_device)
-                truncated = truncated.to(self.store_device)
-                next_obs = next_obs.to(self.store_device)
+        with self.add_context(done, reward, infos, done_reasons) as pos:
+            # Ensure all inputs are on the correct device
+            obs = obs.to(self.store_device)
+            action = action.to(self.store_device)
+            reward = reward.to(self.store_device)
+            done = done.to(self.store_device)
+            truncated = truncated.to(self.store_device)
+            next_obs = next_obs.to(self.store_device)
 
-                self._observations[pos] = obs
-                self._actions[pos] = action
-                self._rewards[pos] = reward
-                self._dones[pos] = done
-                self._truncateds[pos] = truncated
-                self._next_observations[pos] = next_obs
+            self._observations[pos] = obs
+            self._actions[pos] = action
+            self._rewards[pos] = reward
+            self._dones[pos] = done
+            self._truncateds[pos] = truncated
+            self._next_observations[pos] = next_obs
 
     @torch.no_grad()
     def get(self, batch_size: int) -> ReplayBatch:
@@ -198,10 +237,9 @@ class SharedReplayBuffer(BaseBuffer):
             ReplayBatch: A batch of rollout data.
         """
         # 使用锁来保护对 _pos 和 _full 的读取，防止在读取时被其他进程修改
-        with self._lock:
-            # buffer_size 是指时间步长
-            upper_bound = self.current_size
-            available_samples = self.total_current_size
+        # buffer_size 是指时间步长
+        upper_bound = self.current_size
+        available_samples = self.total_current_size
 
         if available_samples == 0:
             raise ValueError("Cannot sample from empty buffer")
