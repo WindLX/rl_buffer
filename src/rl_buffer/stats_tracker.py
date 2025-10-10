@@ -153,7 +153,7 @@ class StatsTracker:
             done_counts = np.array(
                 [ep.get(f"ep_done_{reason}", 0.0) for ep in self.ep_info_buffer]
             )
-            stats[f"{self.category}/done_{reason}_rate"] = float(np.mean(done_counts))
+            stats[f"{self.category}/Done/{reason}_rate"] = float(np.mean(done_counts))
 
         # Compute stats for step-wise reward
         lengths = np.array([ep.get("ep_lengths", 1.0) for ep in self.ep_info_buffer])
@@ -173,7 +173,7 @@ class StatsTracker:
                 step_values = values[lengths > 0] / valid_lengths
                 step_metric_stats = self._compute_metric_stats(step_values)
                 for stat_name, stat_value in step_metric_stats.items():
-                    stats[f"{self.category}/step_{key}_{stat_name}"] = stat_value
+                    stats[f"{self.category}/Step/{key}_{stat_name}"] = stat_value
 
         return stats
 
@@ -194,7 +194,6 @@ class StatsTracker:
                 [ep.get(f"ep_{key}", 0.0) for ep in self.ep_info_buffer]
             )
 
-        rewards = raw_values.get(f"{self.category}/rewards", np.array([]))
         lengths = raw_values.get(f"{self.category}/lengths", np.array([]))
 
         if lengths.size > 0:
@@ -208,7 +207,7 @@ class StatsTracker:
 
                     metric_values = raw_values.get(f"{self.category}/{key}")
                     if metric_values is not None and metric_values.size == lengths.size:
-                        raw_values[f"{self.category}/step_{key}"] = (
+                        raw_values[f"{self.category}/Step/{key}"] = (
                             metric_values[valid_mask] / valid_lengths
                         )
 
