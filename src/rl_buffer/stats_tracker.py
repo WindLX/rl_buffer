@@ -156,15 +156,24 @@ class StatsTracker:
             stats[f"{self.category}/done_{reason}_rate"] = float(np.mean(done_counts))
 
         # Compute stats for step-wise reward
-        rewards = np.array([ep.get("ep_rewards", 0.0) for ep in self.ep_info_buffer])
         lengths = np.array([ep.get("ep_lengths", 1.0) for ep in self.ep_info_buffer])
         # Avoid division by zero
         valid_lengths = lengths[lengths > 0]
+
+        # Also compute per-step stats for other metrics
         if valid_lengths.size > 0:
-            step_rewards = rewards[lengths > 0] / valid_lengths
-            step_reward_stats = self._compute_metric_stats(step_rewards)
-            for stat_name, stat_value in step_reward_stats.items():
-                stats[f"{self.category}/step_reward_{stat_name}"] = stat_value
+            for key in self.metrics_keys:
+                if key in ["lengths"]:
+                    continue  # rewards is handled, lengths is the divisor
+
+                values = np.array(
+                    [ep.get(f"ep_{key}", 0.0) for ep in self.ep_info_buffer]
+                )
+
+                step_values = values[lengths > 0] / valid_lengths
+                step_metric_stats = self._compute_metric_stats(step_values)
+                for stat_name, stat_value in step_metric_stats.items():
+                    stats[f"{self.category}/step_{key}_{stat_name}"] = stat_value
 
         return stats
 
@@ -188,12 +197,20 @@ class StatsTracker:
         rewards = raw_values.get(f"{self.category}/rewards", np.array([]))
         lengths = raw_values.get(f"{self.category}/lengths", np.array([]))
 
-        if rewards.size > 0 and lengths.size > 0:
+        if lengths.size > 0:
             valid_mask = lengths > 0
-            if np.any(valid_mask):
-                raw_values[f"{self.category}/step_reward"] = (
-                    rewards[valid_mask] / lengths[valid_mask]
-                )
+            valid_lengths = lengths[valid_mask]
+
+            if valid_lengths.size > 0:
+                for key in self.metrics_keys:
+                    if key == "lengths":
+                        continue
+
+                    metric_values = raw_values.get(f"{self.category}/{key}")
+                    if metric_values is not None and metric_values.size == lengths.size:
+                        raw_values[f"{self.category}/step_{key}"] = (
+                            metric_values[valid_mask] / valid_lengths
+                        )
 
         return raw_values
 

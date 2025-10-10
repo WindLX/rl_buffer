@@ -192,7 +192,7 @@ pytest
 We plan to continue enhancing `rl-buffer` with new features in the future, including:
 
 - [x] **Parallel Safe**
-- [ ] **Prioritized Experience Replay (PER)**
+- [x] **Prioritized Experience Replay (PER)**
 - [ ] **Native support for Dictionary Observation Spaces (`Dict Spaces`)**
 - [ ] **Sequence buffers for Recurrent Policies**
 

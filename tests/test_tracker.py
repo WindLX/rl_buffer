@@ -102,10 +102,10 @@ def test_basic_tracking_and_statistics(tracker_two_envs):
     assert np.isclose(stats["test/score_mean"], np.mean(scores))
     assert np.isclose(stats["test/score_std"], np.std(scores))
 
-    assert np.isclose(stats["test/step_reward_mean"], np.mean(step_rewards))
-    assert np.isclose(stats["test/step_reward_std"], np.std(step_rewards))
-    assert np.isclose(stats["test/step_reward_min"], np.min(step_rewards))
-    assert np.isclose(stats["test/step_reward_max"], np.max(step_rewards))
+    assert np.isclose(stats["test/step_rewards_mean"], np.mean(step_rewards))
+    assert np.isclose(stats["test/step_rewards_std"], np.std(step_rewards))
+    assert np.isclose(stats["test/step_rewards_min"], np.min(step_rewards))
+    assert np.isclose(stats["test/step_rewards_max"], np.max(step_rewards))
 
 
 # --- 4. 边缘情况测试 (Edge Cases) ---
@@ -154,7 +154,7 @@ def test_zero_length_episode_does_not_crash():
     tracker.update(dones=np.array([1]), rewards=np.array([5.0]))
     stats = tracker.get_statistics()
     # Step reward should be 5.0 / 1.0 = 5.0
-    assert np.isclose(stats["Rollout/step_reward_mean"], 5.0)
+    assert np.isclose(stats["Rollout/step_rewards_mean"], 5.0)
 
 
 def test_reset(tracker_two_envs):
@@ -249,9 +249,9 @@ def test_get_raw_values(tracker_two_envs):
     assert "test/rewards" in raw
     assert "test/lengths" in raw
     assert "test/score" in raw
-    assert "test/step_reward" in raw
+    assert "test/step_rewards" in raw
 
     np.testing.assert_array_equal(raw["test/rewards"], np.array([10.0, 10.0]))
     np.testing.assert_array_equal(raw["test/lengths"], np.array([1.0, 2.0]))
     np.testing.assert_array_equal(raw["test/score"], np.array([100.0, 100.0]))
-    np.testing.assert_array_equal(raw["test/step_reward"], np.array([10.0, 5.0]))
+    np.testing.assert_array_equal(raw["test/step_rewards"], np.array([10.0, 5.0]))
