@@ -34,7 +34,7 @@ def test_initial_state():
     assert "lengths" in tracker.metrics_keys
     assert "score" in tracker.metrics_keys
     assert "energy" in tracker.metrics_keys
-    assert tracker.get_statistics() == {}
+    assert tracker.get_statistics() == ({}, {})
     assert tracker.get_raw_values() == {}
 
 
@@ -47,7 +47,7 @@ def test_basic_tracking_and_statistics(tracker_two_envs):
         infos={"score": np.array([10, 20])},
     )
     assert tracker_two_envs.trajectory_num == 0
-    assert tracker_two_envs.get_statistics() == {}
+    assert tracker_two_envs.get_statistics() == ({}, {})
 
     # Step 2: Env 0 finishes
     tracker_two_envs.update(
@@ -59,7 +59,7 @@ def test_basic_tracking_and_statistics(tracker_two_envs):
 
     # Check current stats after one episode
     # Episode 1: reward=1+3=4, length=2, score=10+30=40
-    stats = tracker_two_envs.get_statistics()
+    _, stats = tracker_two_envs.get_statistics()
     assert np.isclose(stats["test/rewards_mean"], 4.0)
     assert np.isclose(stats["test/rewards_std"], 0.0)  # std of one element is 0
     assert np.isclose(stats["test/rewards_min"], 4.0)
@@ -83,7 +83,7 @@ def test_basic_tracking_and_statistics(tracker_two_envs):
     # Now check stats with two completed episodes
     # Episode 1: reward=4, length=2, score=40
     # Episode 2: reward=2+4+6=12, length=3, score=20+40+60=120
-    stats = tracker_two_envs.get_statistics()
+    _, stats = tracker_two_envs.get_statistics()
 
     # --- 3. 精确断言 (Precise Assertions) ---
     rewards = np.array([4.0, 12.0])
@@ -102,10 +102,10 @@ def test_basic_tracking_and_statistics(tracker_two_envs):
     assert np.isclose(stats["test/score_mean"], np.mean(scores))
     assert np.isclose(stats["test/score_std"], np.std(scores))
 
-    assert np.isclose(stats["test/step_rewards_mean"], np.mean(step_rewards))
-    assert np.isclose(stats["test/step_rewards_std"], np.std(step_rewards))
-    assert np.isclose(stats["test/step_rewards_min"], np.min(step_rewards))
-    assert np.isclose(stats["test/step_rewards_max"], np.max(step_rewards))
+    assert np.isclose(stats["test/Step/rewards_mean"], np.mean(step_rewards))
+    assert np.isclose(stats["test/Step/rewards_std"], np.std(step_rewards))
+    assert np.isclose(stats["test/Step/rewards_min"], np.min(step_rewards))
+    assert np.isclose(stats["test/Step/rewards_max"], np.max(step_rewards))
 
 
 # --- 4. 边缘情况测试 (Edge Cases) ---
@@ -119,7 +119,7 @@ def test_buffer_limit():
     )  # Ep 3, pushes out Ep 1
 
     assert tracker.trajectory_num == 2
-    stats = tracker.get_statistics()
+    _, stats = tracker.get_statistics()
     # Should only average the last two episodes (20 and 30)
     assert np.isclose(stats["test/rewards_mean"], 25.0)
 
@@ -130,7 +130,7 @@ def test_no_completed_episodes():
     tracker.update(dones=np.array([0]), rewards=np.array([1.0]), infos={})
     tracker.update(dones=np.array([0]), rewards=np.array([1.0]), infos={})
     assert tracker.trajectory_num == 0
-    assert tracker.get_statistics() == {}
+    assert tracker.get_statistics() == ({}, {})
     assert tracker.get_raw_values() == {}
 
 
@@ -142,7 +142,7 @@ def test_all_envs_done_simultaneously(tracker_two_envs):
         infos={"score": np.array([100, 200])},
     )
     assert tracker_two_envs.trajectory_num == 2
-    stats = tracker_two_envs.get_statistics()
+    _, stats = tracker_two_envs.get_statistics()
     assert np.isclose(stats["test/rewards_mean"], 15.0)
     assert np.isclose(stats["test/score_mean"], 150.0)
 
@@ -152,21 +152,21 @@ def test_zero_length_episode_does_not_crash():
     tracker = StatsTracker(num_envs=1)
     # Episode has length 1.
     tracker.update(dones=np.array([1]), rewards=np.array([5.0]))
-    stats = tracker.get_statistics()
+    _, stats = tracker.get_statistics()
     # Step reward should be 5.0 / 1.0 = 5.0
-    assert np.isclose(stats["Rollout/step_rewards_mean"], 5.0)
+    assert np.isclose(stats["Rollout/Step/rewards_mean"], 5.0)
 
 
 def test_reset(tracker_two_envs):
     """Test that reset clears all internal states correctly."""
     tracker_two_envs.update(dones=np.array([1, 1]), rewards=np.array([1.0, 2.0]))
     assert tracker_two_envs.trajectory_num == 2
-    assert len(tracker_two_envs.get_statistics()) > 0
+    assert len(tracker_two_envs.get_statistics()[1]) > 0
 
     tracker_two_envs.reset()
 
     assert tracker_two_envs.trajectory_num == 0
-    assert tracker_two_envs.get_statistics() == {}
+    assert tracker_two_envs.get_statistics() == ({}, {})
     assert tracker_two_envs.ep_info_buffer == deque()
     # Check that accumulators are also zeroed
     assert np.all(tracker_two_envs._current_episode_stats["rewards"] == 0)
@@ -202,14 +202,14 @@ def test_done_reasons_tracking():
     # Total completed episodes: 5
     # timeout: 1, success: 2, failure: 1, other: 1
     assert tracker.trajectory_num == 5
-    stats = tracker.get_statistics()
+    _, stats = tracker.get_statistics()
 
     # Rates are calculated over the total number of episodes in the buffer
-    assert np.isclose(stats["test/done_timeout_rate"], 1 / 5)
-    assert np.isclose(stats["test/done_success_rate"], 2 / 5)
-    assert np.isclose(stats["test/done_failure_rate"], 1 / 5)
+    assert np.isclose(stats["test/Done/timeout_rate"], 1 / 5)
+    assert np.isclose(stats["test/Done/success_rate"], 2 / 5)
+    assert np.isclose(stats["test/Done/failure_rate"], 1 / 5)
     # Check that a key not in done_reason_keys is not present
-    assert "test/done_alien_invasion_rate" not in stats
+    assert "test/Done/alien_invasion_rate" not in stats
 
 
 def test_multidimensional_rewards():
@@ -221,7 +221,7 @@ def test_multidimensional_rewards():
     tracker.update(dones=np.array([0, 0]), rewards=rewards_step1)
     tracker.update(dones=np.array([1, 1]), rewards=rewards_step2)
 
-    stats = tracker.get_statistics()
+    _, stats = tracker.get_statistics()
     # Env 0 total reward: 1.5 + 3.5 = 5.0
     # Env 1 total reward: 2.0 + 2.0 = 4.0
     # Mean reward: (5.0 + 4.0) / 2 = 4.5
@@ -249,9 +249,9 @@ def test_get_raw_values(tracker_two_envs):
     assert "test/rewards" in raw
     assert "test/lengths" in raw
     assert "test/score" in raw
-    assert "test/step_rewards" in raw
+    assert "test/Step/rewards" in raw
 
     np.testing.assert_array_equal(raw["test/rewards"], np.array([10.0, 10.0]))
     np.testing.assert_array_equal(raw["test/lengths"], np.array([1.0, 2.0]))
     np.testing.assert_array_equal(raw["test/score"], np.array([100.0, 100.0]))
-    np.testing.assert_array_equal(raw["test/step_rewards"], np.array([10.0, 5.0]))
+    np.testing.assert_array_equal(raw["test/Step/rewards"], np.array([10.0, 5.0]))

@@ -114,19 +114,23 @@ class StatsTracker:
             for key in self.metrics_keys:
                 self._current_episode_stats[key][env_idx] = 0.0
 
-    def _compute_metric_stats(self, values: np.ndarray) -> dict[str, float]:
+    def _compute_metric_stats(
+        self, values: np.ndarray
+    ) -> tuple[float, dict[str, float]]:
         """Helper function to compute mean, std, min, and max for a set of values."""
         if values.size == 0:
-            return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
+            return 0.0, {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
 
-        return {
-            "mean": float(np.mean(values)),
+        mean = float(np.mean(values))
+
+        return mean, {
+            "mean": mean,
             "std": float(np.std(values)) if values.size > 1 else 0.0,
             "min": float(np.min(values)),
             "max": float(np.max(values)),
         }
 
-    def get_statistics(self) -> dict[str, float]:
+    def get_statistics(self) -> tuple[dict[str, float], dict[str, float]]:
         """
         Computes and returns the summary statistics for all completed episodes in the buffer.
 
@@ -136,16 +140,19 @@ class StatsTracker:
             Returns an empty dictionary if no episodes have been completed.
         """
         if not self.ep_info_buffer:
-            return {}
+            return {}, {}
 
         stats: dict[str, float] = {}
+        stats_detailed: dict[str, float] = {}
 
         # Compute stats for all primary metrics
         for key in self.metrics_keys:
             values = np.array([ep.get(f"ep_{key}", 0.0) for ep in self.ep_info_buffer])
-            metric_stats = self._compute_metric_stats(values)
+            metric_means, metric_stats = self._compute_metric_stats(values)
+
+            stats[f"{self.category}/{key}"] = metric_means
             for stat_name, stat_value in metric_stats.items():
-                stats[f"{self.category}/{key}_{stat_name}"] = stat_value
+                stats_detailed[f"{self.category}/{key}_{stat_name}"] = stat_value
 
         # Compute stats for done reasons
         for reason in self.done_reason_keys:
@@ -154,6 +161,9 @@ class StatsTracker:
                 [ep.get(f"ep_done_{reason}", 0.0) for ep in self.ep_info_buffer]
             )
             stats[f"{self.category}/Done/{reason}_rate"] = float(np.mean(done_counts))
+            stats_detailed[f"{self.category}/Done/{reason}_rate"] = float(
+                np.mean(done_counts)
+            )
 
         # Compute stats for step-wise reward
         lengths = np.array([ep.get("ep_lengths", 1.0) for ep in self.ep_info_buffer])
@@ -171,11 +181,15 @@ class StatsTracker:
                 )
 
                 step_values = values[lengths > 0] / valid_lengths
-                step_metric_stats = self._compute_metric_stats(step_values)
-                for stat_name, stat_value in step_metric_stats.items():
-                    stats[f"{self.category}/Step/{key}_{stat_name}"] = stat_value
+                step_means, step_metric_stats = self._compute_metric_stats(step_values)
 
-        return stats
+                stats[f"{self.category}/Step/{key}"] = step_means
+                for stat_name, stat_value in step_metric_stats.items():
+                    stats_detailed[f"{self.category}/Step/{key}_{stat_name}"] = (
+                        stat_value
+                    )
+
+        return stats, stats_detailed
 
     def get_raw_values(self) -> dict[str, np.ndarray]:
         """

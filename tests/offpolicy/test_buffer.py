@@ -222,7 +222,7 @@ def test_stats_tracker_integration(
 
     # Check if the episode info buffer in the tracker was populated
     assert len(stats_tracker.ep_info_buffer) > 0
-    stats = stats_tracker.get_statistics()
+    _, stats = stats_tracker.get_statistics()
     assert "Rollout/rewards_mean" in stats
     assert "Rollout/lengths_mean" in stats
     assert "Rollout/custom_metric_mean" in stats

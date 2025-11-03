@@ -329,7 +329,7 @@ def test_episode_statistics_no_episodes_completed(
             log_prob,
         )
 
-    stats = buffer.stats_tracker.get_statistics()
+    _, stats = buffer.stats_tracker.get_statistics()
     assert stats == {}
 
 
@@ -364,7 +364,7 @@ def test_episode_statistics_single_episode_per_env(
             {"custom_metric": custom_metrics_per_step[i]},  # extra info
         )
 
-    stats = buffer.stats_tracker.get_statistics()
+    _, stats = buffer.stats_tracker.get_statistics()
 
     torch.testing.assert_close(stats["Rollout/rewards_mean"], (3.0 + 6.0) / 2)
     torch.testing.assert_close(stats["Rollout/lengths_mean"], (3 + 3) / 2)
@@ -424,7 +424,7 @@ def test_episode_statistics_multiple_episodes_different_lengths(
         {"custom_metric": torch.tensor([0.4, 0.0])},  # extra info
     )  # Env 0 done (rew=4, len=2)
 
-    stats = buffer.stats_tracker.get_statistics()
+    _, stats = buffer.stats_tracker.get_statistics()
 
     expected_rewards = [2.0, 3.0, 4.0]  # Env0-Ep1, Env1-Ep1, Env0-Ep2
     expected_lengths = [2, 3, 2]  # Env0-Ep1, Env1-Ep1, Env0-Ep2
