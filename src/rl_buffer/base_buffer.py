@@ -3,6 +3,7 @@ from typing import Iterator, Mapping, Any
 from enum import Enum
 
 import torch
+import numpy as np
 
 from .stats_tracker import StatsTracker
 
@@ -72,13 +73,7 @@ class BaseBuffer:
             self.stats_tracker.reset()
 
     @contextmanager
-    def add_context(
-        self,
-        done: torch.Tensor,
-        reward: torch.Tensor,
-        infos: Mapping[str, Any] = {},
-        done_reasons: list[str | None] = [],
-    ) -> Iterator[int]:
+    def add_context(self) -> Iterator[int]:
         """
         A context manager to handle the logic of updating the buffer position `_pos` and the `_full` flag.
 
@@ -101,18 +96,34 @@ class BaseBuffer:
 
         start_pos = self._pos
         try:
-            # Update episode-wise statistics (convert to numpy for stats tracker)
-            self.stats_tracker.update(
-                dones=done.cpu().numpy(),
-                rewards=reward.cpu().numpy(),
-                infos=infos,
-                done_reasons=done_reasons,
-            )
             yield start_pos
         finally:
             self._pos += 1
             if self._pos >= self._buffer_size:
                 self._full = True
+
+    def update_stats(
+        self,
+        dones: np.ndarray,
+        rewards: np.ndarray,
+        infos: Mapping[str, Any] = {},
+        done_reasons: list[str | None] = [],
+    ) -> None:
+        """
+        Update the stats tracker with the provided data.
+
+        Args:
+            dones (np.ndarray): An array of done signals from the environments.
+            rewards (np.ndarray): An array of rewards from the environments.
+            infos (Mapping[str, Any], optional): A dictionary of info from the environments.
+            done_reasons (list[str | None], optional): A list of strings explaining why each environment terminated.
+        """
+        self._stats_tracker.update(
+            dones=dones,
+            rewards=rewards,
+            infos=infos,
+            done_reasons=done_reasons,
+        )
 
     @property
     def full(self) -> bool:

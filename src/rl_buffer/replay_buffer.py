@@ -117,8 +117,6 @@ class ReplayBuffer(BaseBuffer):
         done: torch.Tensor,
         truncated: torch.Tensor,
         next_obs: torch.Tensor,
-        infos: Mapping[str, Any] = {},
-        done_reasons: list[str | None] = [],
     ) -> None:
         """
         Add a transition to the buffer.
@@ -137,7 +135,7 @@ class ReplayBuffer(BaseBuffer):
         Raises:
             RuntimeError: If the buffer is full and cannot accept more transitions.
         """
-        with self.add_context(done, reward, infos, done_reasons) as pos:
+        with self.add_context() as pos:
             # Ensure all inputs are on the correct device
             obs = obs.to(self.store_device)
             action = action.to(self.store_device)
